@@ -81,6 +81,8 @@ class Cell(pygame.sprite.Sprite):
         self.must_x = x * board.cell_size
         self.must_y = y * board.cell_size
 
+        self.last_board_x, self.last_board_y = self.board_x, self.board_y
+
         self.commands = []
         self.now_command = None
 
@@ -163,6 +165,19 @@ class Cell(pygame.sprite.Sprite):
             self.must_forward = forward.from_vector(new_rotate)
         self.progress_forward = 1
 
+    def concerns(self):
+        for collided_sprite in pygame.sprite.spritecollide(self, self.board, False):
+            if collided_sprite == self:
+                continue
+            if collided_sprite is not None:
+                if type(collided_sprite) is Cell:
+                    if self.now_command == self._move_start:
+                        self.progress_x, self.progress_y = 100, 100
+                        self.must_x, self.must_y = self.start_x, self.start_y
+                        self.board_x, self.board_y = self.last_board_x, self.last_board_y
+                        self.now_command = None
+                        self._move()
+
     def add_command(self, command):
         self.commands.append(command)
 
@@ -174,6 +189,7 @@ class Cell(pygame.sprite.Sprite):
     def x(self, new_x):
         self.start_x = self.board_x * self.board.cell_size
         self.progress_x = 1
+        self.last_board_x = self.board_x
         self.board_x = new_x
         self.must_x = self.board_x * self.board.cell_size
 
@@ -185,6 +201,7 @@ class Cell(pygame.sprite.Sprite):
     def y(self, new_y):
         self.start_y = self.board_y * self.board.cell_size
         self.progress_y = 1
+        self.last_board_y = self.board_y
         self.board_y = new_y
         self.must_y = self.board_y * self.board.cell_size
 
@@ -218,9 +235,7 @@ class Player(Cell):
 
     def update(self):
         super().update()
-        collided_sprite = pygame.sprite.spritecollideany(self, self.board)
-        if collided_sprite is not None:
-            pass
+        self.concerns()
 
     def go_forward(self, go_forward):
         self.rotate(forward.opposite(go_forward))
