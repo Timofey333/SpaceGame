@@ -2,17 +2,27 @@ import random
 import pygame
 from pygame import locals
 import forward
+import particles
 
 
 class Board(pygame.sprite.Group):
     def __init__(self, width_height: tuple[int, int], borders: tuple[int, int],
-                 *sprites: list[pygame.sprite.Sprite] or None) -> None:
+                 *sprites: list[pygame.sprite.Sprite] or None, fps=30) -> None:
         self.width = width_height[0]
         self.height = width_height[1]
         self.borders = borders
         self.cell_size = self.height // max(self.borders[0], self.borders[1])
         self.floor_colors = self.generate_floor_colors()
+        self.game_fps = fps
         super().__init__(*sprites)
+
+    @property
+    def fps(self) -> int:
+        return self.game_fps
+
+    @fps.setter
+    def fps(self, n: int):
+        self.game_fps = n
 
     def random_cell(self):
         field = [[True for _ in range(self.borders[0])] for _ in range(self.borders[1])]
@@ -54,11 +64,20 @@ class Cell(pygame.sprite.Sprite):
         self.rect = pygame.Rect(self.image.get_rect())
         self.rect.x = x * board.cell_size
         self.rect.y = y * board.cell_size
+        self.fps = board.fps
 
-        self.cell_degree_forward = 0
+        self.cell_forward = 0
         self.must_forward = 0
         self.place_x = x * board.cell_size
         self.place_y = y * board.cell_size
+
+        self.progress_forward = 100
+        self.start_forward = self.cell_forward
+
+        self.start_x = self.place_x
+        self.progress_x = 100
+        self.start_y = self.place_y
+        self.progress_y = 100
         self.must_x = x * board.cell_size
         self.must_y = y * board.cell_size
 
@@ -76,39 +95,42 @@ class Cell(pygame.sprite.Sprite):
                 self.perform()
 
     def _rotate(self):
-        condition = self.cell_degree_forward != self.must_forward
-        if condition:
-            c = self.cell_degree_forward
+        if self.progress_forward < 100:
+            # подготовительная часть
+            s = self.start_forward
             m = self.must_forward
-            if c == 0 and m == 270:
-                self.cell_degree_forward = 360
-                c = self.cell_degree_forward
-            if c == 270 and m == 0:
-                self.cell_degree_forward = -90
-                c = self.cell_degree_forward
-            shift = 10
-            if c < m:
-                self.cell_degree_forward += shift
-                self.image = pygame.transform.rotate(self.start_image, c + shift)
-            else:
-                self.cell_degree_forward -= shift
-                self.image = pygame.transform.rotate(self.start_image, c - shift)
-            condition = self.cell_degree_forward != self.must_forward
-            if not condition:
+            if s == 0 and m == 270:
+                self.start_forward = 360
+            if s == 270 and m == 0:
+                self.start_forward = -90
+        if self.progress_forward < 100:
+            # чем больше угол поворота, тем меньше shift
+            shift = 900 / abs(self.start_forward - self.must_forward) / self.fps * 30
+            # основная часть
+            self.progress_forward += shift
+            self.cell_forward = int(
+                self.start_forward + ((self.must_forward - self.start_forward) * self.progress_forward / 100))
+            self.image = pygame.transform.rotate(self.start_image, self.cell_forward)
+            if self.progress_forward >= 100:
                 self.now_command = None
+                self.progress_forward = 100
+                self.cell_forward = self.must_forward
+                self.image = pygame.transform.rotate(self.start_image, self.cell_forward)
 
     def _move(self):
-        shift = 10
-        if self.must_x != self.place_x:
-            l_shift = shift * (1 if self.place_x < self.must_x else -1)
-            self.place_x += l_shift
-            if self.must_x == self.place_x:
+        shift = 10 / self.fps * 30
+        if self.progress_x != 100:
+            self.progress_x += shift
+            if self.progress_x >= 100:
+                self.progress_x = 100
                 self.now_command = None
-        if self.must_y != self.place_y:
-            l_shift = shift * (1 if self.place_y < self.must_y else -1)
-            self.place_y += l_shift
-            if self.must_y == self.place_y:
+        if self.progress_y != 100:
+            self.progress_y += shift
+            if self.progress_y >= 100:
+                self.progress_y = 100
                 self.now_command = None
+        self.place_x = int(self.start_x + ((self.must_x - self.start_x) * self.progress_x / 100))
+        self.place_y = int(self.start_y + ((self.must_y - self.start_y) * self.progress_y / 100))
         self.rect.x = self.place_x
         self.rect.y = self.place_y
 
@@ -129,15 +151,17 @@ class Cell(pygame.sprite.Sprite):
         self.add_command((self._rotate_start, new_rotate))
 
     def _rotate_start(self, new_rotate):
-        if self.cell_degree_forward == forward.up_degree(new_rotate):
+        if self.cell_forward == forward.up_degree(new_rotate):
             self.now_command = None
             return
+        self.start_forward = self.must_forward
         if type(new_rotate) == int:
             self.must_forward = new_rotate
         elif type(new_rotate) == str:
             self.must_forward = forward.up_degree(new_rotate)
         elif type(new_rotate) == tuple[int, int]:
             self.must_forward = forward.from_vector(new_rotate)
+        self.progress_forward = 1
 
     def add_command(self, command):
         self.commands.append(command)
@@ -148,8 +172,10 @@ class Cell(pygame.sprite.Sprite):
 
     @x.setter
     def x(self, new_x):
+        self.start_x = self.board_x * self.board.cell_size
+        self.progress_x = 1
         self.board_x = new_x
-        self.must_x = new_x * self.board.cell_size
+        self.must_x = self.board_x * self.board.cell_size
 
     @property
     def y(self):
@@ -157,18 +183,38 @@ class Cell(pygame.sprite.Sprite):
 
     @y.setter
     def y(self, new_y):
+        self.start_y = self.board_y * self.board.cell_size
+        self.progress_y = 1
         self.board_y = new_y
-        self.must_y = new_y * self.board.cell_size
+        self.must_y = self.board_y * self.board.cell_size
 
 
 class Player(Cell):
-    def __init__(self, x, y, *groups):
+    def __init__(self, x, y, *groups, particle_system: None or particles.ParitcleSystem = None):
         super().__init__(x, y, *groups)
         self.start_image = pygame.image.load("Player.png")
         self.start_image = pygame.transform.scale(self.start_image,
                                                   (self.board.cell_size, self.board.cell_size))
         self.image = self.start_image
         self.image.set_colorkey("#000000")
+
+        self.particle_system = particle_system
+
+        self.spawn_particle_anim()
+
+    def spawn_particle_anim(self):
+        if self.particle_system is None:
+            return
+        for _ in range(50):
+            x_y = (self.place_x + self.board.cell_size // 2, self.place_y + self.board.cell_size // 2)
+            d = random.randint(2, 6)
+            w_h = (d, d)
+            forw = (random.randint(-50, 50) / 15,
+                    random.randint(-50, 50) / 15)
+            l_t = random.randint(50, 100)
+            color = "#ffffff"
+            particles.Particle(self.particle_system,
+                               x_y, w_h, forw, l_t, color)
 
     def update(self):
         super().update()
@@ -179,6 +225,25 @@ class Player(Cell):
     def go_forward(self, go_forward):
         self.rotate(forward.opposite(go_forward))
         self.move(go_forward)
+
+    def create_move_particles(self):
+        if self.particle_system is None:
+            return
+        for _ in range(int(3 / self.fps * 30)):
+            x_y = (self.place_x + self.board.cell_size // 2, self.place_y + self.board.cell_size // 2)
+            d = random.randint(2, 6)
+            w_h = (d, d)
+            forw = forward.vector(forward.form_up_degree(self.must_forward))
+            forw = (forw[0] * 5 + random.randint(-20, 20) / 10, forw[1] * 5 + random.randint(-20, 20) / 10)
+            l_t = random.randint(5, 10)
+            color = "#eb1442"
+            particles.Particle(self.particle_system,
+                               x_y, w_h, forw, l_t, color)
+
+    def _move(self):
+        if self.now_command == self._move_start:
+            self.create_move_particles()
+        super()._move()
 
     def up(self):
         self.go_forward(forward.up)
@@ -199,9 +264,11 @@ if __name__ == '__main__':
     clock = pygame.time.Clock()
     fps = 30
     screen.fill("#000000")
-    board = Board((600, 600), (10, 10))
+    board = Board((600, 600), (10, 10), fps=fps)
 
-    player = Player(1, 1, board)
+    particle_system = particles.ParitcleSystem(fps=fps)
+
+    player = Player(1, 1, board, particle_system=particle_system)
 
     board.random_cells(10)
 
@@ -218,6 +285,8 @@ if __name__ == '__main__':
                 if d.get(event.key, None) is not None:
                     d.get(event.key)()
         board.draw_flor(screen)
+        particle_system.update()
+        particle_system.draw(screen)
         board.update()
         board.draw(screen)
         pygame.display.flip()
