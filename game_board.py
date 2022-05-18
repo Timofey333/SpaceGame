@@ -5,6 +5,19 @@ import forward
 import particles
 
 
+class BOardsGroup:
+    def __init__(self, *boards):
+        self.boards = boards
+
+    def draw(self, screen):
+        for board in self.boards:
+            board.draw(screen)
+
+    def update(self):
+        for board in self.boards:
+            board.update()
+
+
 class Board(pygame.sprite.Group):
     def __init__(self, width_height: tuple[int, int], borders: tuple[int, int],
                  *sprites: list[pygame.sprite.Sprite] or None, fps=30,

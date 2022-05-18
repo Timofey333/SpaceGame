@@ -4,6 +4,16 @@ from pygame import locals
 import pyperclip
 
 
+class UIGroup(pygame.sprite.Group):
+    def __init__(self):
+        super().__init__()
+
+    def event(self, event):
+        for sprite in self.sprites():
+            if hasattr(sprite, "event") and callable(getattr(sprite, "event")):
+                sprite.event(event)
+
+
 class InputField(pygame.sprite.Sprite):
     def __init__(self, group, x, y, widht, height, text="",
                  max_simbols=None, passive_color="#ffffff",
@@ -51,6 +61,7 @@ class InputField(pygame.sprite.Sprite):
 
     def update_text(self):
         self.image = pygame.surface.Surface((self.width, self.height))
+        self.image = pygame.surface.Surface((self.width, self.height))
         if self.active:
             self.image.fill(self.active_color)
         else:
@@ -85,3 +96,45 @@ if __name__ == "__main__":
         g.update()
         g.draw(screen)
         pygame.display.flip()
+
+
+class Button(pygame.sprite.Sprite):
+    def __init__(self, group: pygame.sprite.Group, x, y,
+                 width, height, text, fill_color="#ffffff",
+                 font=pygame.font.SysFont("monospace", 15),
+                 text_color="#000000", text_x=5, text_y=5):
+        super().__init__(group)
+        self.sprite_group = group
+        self.x, self.y = x, y
+        self.width, self.height = width, height
+        self.text = text
+        self.font = font
+        self.fill_color = fill_color
+        self.text_clor = text_color
+        self.text_x, self.text_y = text_x, text_y
+
+        self.image = pygame.surface.Surface((width, height))
+        self.image.fill(fill_color)
+        text_surf = font.render(text, 1, text_color)
+        self.image.blit(text_surf, (text_x, text_y))
+        self.rect = pygame.rect.Rect(self.image.get_rect())
+        self.rect.x, self.rect.y = x, y
+
+        self.press_funch = self.on_pressed()
+
+    @property
+    def press(self):
+        return self.press_funch
+
+    @press.setter
+    def press(self, n):
+        self.press_funch = n
+
+    def event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if pygame.mouse.get_pressed()[0]:
+                if self.rect.collidepoint(pygame.mouse.get_pos()):
+                    self.press_funch()
+
+    def on_pressed(self):
+        pass
