@@ -5,7 +5,7 @@ import forward
 import particles
 
 
-class BOardsGroup:
+class BoardsGroup:
     def __init__(self, *boards):
         self.boards = boards
 
@@ -30,8 +30,21 @@ class Board(pygame.sprite.Group):
         self.cell_size = self.height // max(self.borders[0], self.borders[1])
         self.floor_colors = self.generate_floor_colors()
         self.game_fps = fps
-        self.particle_system = particle_system
+        self._particle_system = particle_system
+        self._destroided_players_id = []
         super().__init__(*sprites)
+
+    @property
+    def destroided_players_id(self):
+        return self._destroided_players_id
+
+    @destroided_players_id.setter
+    def destroided_players_id(self, n):
+        self._destroided_players_id = n
+
+    @property
+    def particle_system(self):
+        return self._particle_system
 
     @property
     def ground_board(self):
@@ -45,13 +58,17 @@ class Board(pygame.sprite.Group):
     def fps(self, n: int):
         self.game_fps = n
 
-    def random_cell(self, cell):
+    def random_antnes_pos(self):
         field = [[True for _ in range(self.borders[0])] for _ in range(self.borders[1])]
         for s in self.sprites():
             field[s.y][s.x] = False
         x, y = random.randint(0, self.borders[0] - 1), random.randint(0, self.borders[1] - 1)
         while not field[y][x]:
             x, y = random.randint(0, self.borders[0] - 1), random.randint(0, self.borders[1] - 1)
+        return x, y
+
+    def random_cell(self, cell):
+        x, y = self.random_antnes_pos()
         cell(x, y, self, particle_system=self.particle_system)
 
     def random_cells(self, n: int):
@@ -77,6 +94,10 @@ class Board(pygame.sprite.Group):
 
 class Cell(pygame.sprite.Sprite):
     def __init__(self, x, y, board: Board) -> None:
+        if x is None:
+            x = board.random_antnes_pos()[0]
+        if y is None:
+            y = board.random_antnes_pos()[1]
         super().__init__(board)
         self.board_x, self.board_y = x, y
         self.board = board
@@ -111,6 +132,14 @@ class Cell(pygame.sprite.Sprite):
         self.is_concerns = False
         self.is_icing = False
 
+    def check_borders(self):
+        if self.board_x < 0 or self.board_x >= self.board.borders[0] and\
+            self.board_y < 0 or self.board_y >= self.board.borders[1]:
+            if type(self) is Player:
+                self.destroid("Qut of borders")
+            else:
+                self.kill()
+
     def update(self):
         self._check_commands()
         self._rotate()
@@ -138,6 +167,7 @@ class Cell(pygame.sprite.Sprite):
 
     def _check_commands(self):
         if self.now_command is None:
+            self.check_borders()
             if len(self.commands) != 0:
                 self.perform()
 
@@ -274,7 +304,7 @@ class Cell(pygame.sprite.Sprite):
 
 
 class Player(Cell):
-    def __init__(self, x, y, *groups, particle_system: None or particles.ParitcleSystem = None):
+    def __init__(self, id, x, y, *groups, particle_system: None or particles.ParitcleSystem = None):
         super().__init__(x, y, *groups)
         self.start_image = pygame.image.load("Player.png")
         self.start_image = pygame.transform.scale(self.start_image,
@@ -282,9 +312,15 @@ class Player(Cell):
         self.image = self.start_image
         self.image.set_colorkey("#000000")
 
+        self.player_id = id
+
         self.particle_system = particle_system
 
         self.spawn_particle_anim()
+
+    @property
+    def id(self):
+        return self.player_id
 
     def spawn_particle_anim(self):
         if self.particle_system is None:
@@ -299,6 +335,10 @@ class Player(Cell):
             color = "#ffffff"
             particles.Particle(self.particle_system,
                                x_y, w_h, forw, l_t, color)
+
+    def destroid(self, reason):
+        self.board.destroided_players_id.append(self.id)
+        self.kill()
 
     def update(self):
         super().update()

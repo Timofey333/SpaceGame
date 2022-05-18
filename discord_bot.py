@@ -1,6 +1,6 @@
 import discord
-from threading import Thread
 from game import GameManager
+import game_board
 
 # REACTIONS
 JOIN_REACTION = "🎟"
@@ -12,15 +12,14 @@ DESTROID_REACTION = "💀"
 
 
 class CustomClient(discord.Client):
-    def __init__(self, game_manager: GameManager, bot_settings_role: str, channel_id: int):
+    def __init__(self, game_manager: GameManager, channel_id: int):
         super().__init__()
         self._game_manager = game_manager
-        self.bot_settings_role = bot_settings_role
         self.channel_id = channel_id
         self.reactions = [UP_REACTION, DOWN_REACTION,
                           LEFT_REACTION, RIGHT_REACTION,
                           DESTROID_REACTION]
-        self.mes = None
+        print("Start game")
 
     @property
     def game_manager(self) -> GameManager:
@@ -32,40 +31,37 @@ class CustomClient(discord.Client):
 
     async def on_ready(self):
         print(f"{self.user} has connected to Ds")
+        channel = self.get_channel(int(self.channel_id))
+        print(*self.get_all_channels())
+        self.mes = await channel.send("=== Space Game ===")
+        await self.mes.clear_reactions()
+        await self.mes.add_reaction(JOIN_REACTION)
+        for i in self.reactions:
+            await self.mes.add_reaction(i)
 
     def set_colot_reactions(self):
         pass
 
-    async def on_message(self, message):
-        if message.channel.id != self.channel_id:
-            return
-        is_admin = len(list(filter(lambda r: r.name == self.bot_settings_role,
-                                   message.author.roles))) == 1
-        if not is_admin:
-            return
-        if message.content == "$start":
-            print("Start game")
-            self.mes = await message.channel.send("=== Space Game ===")
-            await self.mes.clear_reactions()
-            await self.mes.add_reaction(JOIN_REACTION)
-            for i in self.reactions:
-                await self.mes.add_reaction(i)
-
     async def on_reaction_add(self, reaction, user):
         if user == self.user:
             return
-        if reaction.message.channel.id != self.channel_id:
+        if int(reaction.message.channel.id) != int(self.channel_id):
             return
         if reaction.message != self.mes:
             return
         print(str(reaction), user)
         await reaction.remove(user)
-        board = self._game_manager.active_board
-        if str(reaction) == JOIN_REACTION:
-            Player(board, user.id, name=user.name)
+        player = self._game_manager.find_player(user.id)
+        if str(reaction) == JOIN_REACTION and player is None:
+            if user.id in self._game_manager.active_board.destroided_players_id:
+                return
+            game_board.Player(user.id, None, None, self._game_manager.active_board,
+                              particle_system=self.game_manager.active_board.particle_system)
             return
-        player: Player = self._game_manager.board.find_player(user.id)
+
         if player is None:
+            return
+        if user.id in self._game_manager.active_board.destroided_players_id:
             return
         d = {UP_REACTION: player.down,
              DOWN_REACTION: player.up,

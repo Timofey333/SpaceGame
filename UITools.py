@@ -18,11 +18,14 @@ class InputField(pygame.sprite.Sprite):
     def __init__(self, group, x, y, widht, height, text="",
                  max_simbols=None, passive_color="#ffffff",
                  active_color="#efefef", is_password=False,
-                 see_simbols=None):
+                 see_simbols=None, ampty_text="",
+                 ampty_text_color="#c2c2c2"):
         super().__init__(group)
         self.width, self.height = widht, height
         self.x, self.y = x, y
         self.text = text
+        self.ampty_text = ampty_text
+        self.ampty_text_color = ampty_text_color
         self.active = False
 
         self.max_simbols = max_simbols
@@ -32,6 +35,10 @@ class InputField(pygame.sprite.Sprite):
 
         self.update_text()
 
+    @property
+    def input_text(self) -> str:
+        return self.text
+
     def event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             if pygame.mouse.get_pressed()[0]:
@@ -39,8 +46,8 @@ class InputField(pygame.sprite.Sprite):
                     self.active = True
                     self.update_text()
                     return
-            self.update_text()
             self.active = False
+            self.update_text()
         if event.type == pygame.KEYDOWN:
             if self.active:
                 ctrl = event.mod and pygame.KMOD_CTRL
@@ -67,10 +74,14 @@ class InputField(pygame.sprite.Sprite):
         else:
             self.image.fill(self.passive_color)
         text = str(self.text) if not self.is_password else "*" * len(str(self.text))
+        color = "#000000"
+        if len(text) == 0:
+            text = self.ampty_text
+            color = self.ampty_text_color
         if self.see_simbols is not None:
             if len(text) > self.see_simbols:
                 text = text[:self.see_simbols - 3] + "..."
-        t = pygame.font.SysFont("monospace", int(10 * self.height / 20)).render(text, 1, "#000000")
+        t = pygame.font.SysFont("monospace", int(10 * self.height / 20)).render(text, 1, color)
         self.image.blit(t, (5, 5))
         self.rect = pygame.rect.Rect(self.image.get_rect())
         self.rect.x, self.rect.y = self.x, self.y
@@ -85,7 +96,7 @@ if __name__ == "__main__":
 
     g = pygame.sprite.Group()
 
-    field = InputField(g, 10, 10, 500, 100, text="|")
+    field = InputField(g, 10, 10, 500, 100, ampty_text="enter bot token")
 
     while True:
         clock.tick(fps)
