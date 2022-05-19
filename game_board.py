@@ -3,6 +3,7 @@ import pygame
 from pygame import locals
 import forward
 import particles
+import item_status
 
 
 class BoardsGroup:
@@ -26,13 +27,34 @@ class Board(pygame.sprite.Group):
         self.floor_board = floor_board
         self.width = width_height[0]
         self.height = width_height[1]
-        self.borders = borders
+        self._borders = borders
+        self._start_borders = borders
+        self._left_borders = (-1, -1)
         self.cell_size = self.height // max(self.borders[0], self.borders[1])
         self.floor_colors = self.generate_floor_colors()
         self.game_fps = fps
         self._particle_system = particle_system
         self._destroided_players_id = []
+        self.zone_cells = []
+        if self.floor_board is not None:
+            self.zone_event = pygame.event.Event(0)
+            self.zone_events_count = 5
+            pygame.time.set_timer(self.zone_event, random.randint(40, 60) * 1000)
+            self.set_cell_event = pygame.event.Event(1)
+            pygame.time.set_timer(self.set_cell_event, 10)
         super().__init__(*sprites)
+
+    @property
+    def start_borders(self):
+        return self._start_borders
+
+    @property
+    def borders(self):
+        return self._borders
+
+    @property
+    def left_borders(self):
+        return self._left_borders
 
     @property
     def alive_players(self):
@@ -67,6 +89,39 @@ class Board(pygame.sprite.Group):
     def fps(self, n: int):
         self.game_fps = n
 
+    def set_zone_cell(self):
+        if len(self.zone_cells) != 0:
+            c = self.zone_cells.pop(0)
+            ZoneCell(c[0], c[1], self)
+
+    def event(self, event, no_zone=False):
+        if self.floor_board is None:
+            return
+        if event == self.zone_event and not no_zone:
+            self.zone()
+        elif event == self.set_cell_event:
+            self.set_zone_cell()
+
+    def zone(self):
+        self.zone_events_count -= 1
+        if self.zone_events_count <= 0:
+            return
+        self._borders = (self._borders[0] - 1, self._borders[1] - 1)
+        self._left_borders = (self._left_borders[0] + 1, self._left_borders[1] + 1)
+        m = self.get_zone_cells_cords()
+        random.shuffle(m)
+        self.zone_cells += m
+        pygame.time.set_timer(self.zone_event, random.randint(40, 60) * 1000)
+
+    def get_zone_cells_cords(self):
+        c = []
+        for x in range(self.start_borders[0]):
+            for y in range(self.start_borders[1]):
+                if x == self.left_borders[0] or x == self.borders[0] or \
+                        y == self.left_borders[1] or y == self.borders[1]:
+                    c.append((x, y))
+        return c
+
     def spawn_players(self, players: list):
         for p in players:
             Player(p.id, None, None, self, particle_system=self.particle_system)
@@ -82,6 +137,9 @@ class Board(pygame.sprite.Group):
 
     def random_cell(self, cell):
         x, y = self.random_antnes_pos()
+        if cell == Bullet:
+            cell(x, y, self, item_status.active, particle_system=self.particle_system)
+            return
         cell(x, y, self, particle_system=self.particle_system)
 
     def random_cells(self, n: int):
@@ -98,8 +156,10 @@ class Board(pygame.sprite.Group):
         return floor_colors
 
     def draw_flor(self, screen: pygame.surface):
-        for i in range(self.borders[0]):
-            for j in range(self.borders[1]):
+        if self.floor_board is not None:
+            return
+        for i in range(self.borders[1]):
+            for j in range(self.borders[0]):
                 surf = pygame.Surface((self.cell_size, self.cell_size))
                 surf.fill(self.floor_colors[i][j])
                 screen.blit(surf, (i * self.cell_size, j * self.cell_size))
@@ -145,9 +205,16 @@ class Cell(pygame.sprite.Sprite):
         self.is_concerns = False
         self.is_icing = False
 
+        self.move_speed = 10
+        self.rotate_speed = 10
+
+    @property
+    def commands_property(self):
+        return self.commands
+
     def check_borders(self):
-        if self.board_x < 0 or self.board_x >= self.board.borders[0] or\
-            self.board_y < 0 or self.board_y >= self.board.borders[1]:
+        if self.board_x < 0 or self.board_x >= self.board.start_borders[0] or \
+                self.board_y < 0 or self.board_y >= self.board.start_borders[1]:
             self.destroid("Qut of borders")
 
     def destroid(self, reason: str):
@@ -195,7 +262,7 @@ class Cell(pygame.sprite.Sprite):
                 self.start_forward = -90
         if self.progress_forward < 100:
             # чем больше угол поворота, тем меньше shift
-            shift = 900 / abs(self.start_forward - self.must_forward) / self.fps * 30
+            shift = self.rotate_speed * 90 / abs(self.start_forward - self.must_forward) / self.fps * 30
             # основная часть
             self.progress_forward += shift
             self.cell_forward = int(
@@ -208,7 +275,7 @@ class Cell(pygame.sprite.Sprite):
                 self.image = pygame.transform.rotate(self.start_image, self.cell_forward)
 
     def _move(self):
-        shift = 10 / self.fps * 30
+        shift = self.move_speed / self.fps * 30
         if self.progress_x != 100:
             self.progress_x += shift
             if self.progress_x >= 100:
@@ -268,25 +335,32 @@ class Cell(pygame.sprite.Sprite):
             if not (self.board_x == collided_sprite.board_x and self.board_y == collided_sprite.board_y):
                 continue
             if collided_sprite is not None:
-                concern_cell_types = [Asteroid, Ice, IceCrystal]
+                concern_cell_types = [Player, Asteroid, Ice, IceCrystal, ZoneCell, Bullet]
                 if type(collided_sprite) in concern_cell_types:
                     if self.now_command == self._move_start and (not self.is_concerns):
                         self.is_concerns = True
-                        if type(collided_sprite) is Ice:
-                            self.commands.insert(0, (
-                                self._move_start, forward.opposite(forward.form_up_degree(self.must_forward))))
-                            self.is_icing = True
-                        if collided_sprite.cell_durability is not None:
+                        if collided_sprite.cell_durability is None:
+                            # НЕТ СТОЛКНОВЕНИЯ
+                            if type(collided_sprite) is Ice:
+                                self.commands.insert(0, (
+                                    self._move_start, forward.opposite(forward.form_up_degree(self.must_forward))))
+                            collided_sprite.on_none_knock(self)
+                        else:
+                            # ТОЛКНОВЕНИЕ
+                            if type(collided_sprite) is Player and type(self) is Player:
+                                return
                             self.progress_x, self.progress_y = 80, 80
                             i_x, i_y = self.must_x, self.must_y
                             self.must_x, self.must_y = self.start_x, self.start_y
                             self.start_x, self.start_y = i_x, i_y
                             self.board_x, self.board_y = self.last_board_x, self.last_board_y
                             self.now_command = self._move_start
-                        if self.is_icing:
-                            collided_sprite.knock(self, strong=1000)
-                        else:
-                            collided_sprite.knock(self)
+                            if type(self) == Bullet:
+                                collided_sprite.knock(self, strong=3)
+                                self.destroid("Was bullet")
+                            else:
+                                collided_sprite.knock(self)
+
 
     def add_command(self, command):
         self.commands.append(command)
@@ -316,6 +390,29 @@ class Cell(pygame.sprite.Sprite):
         self.must_y = self.board_y * self.board.cell_size
 
 
+class ZoneCell(Cell):
+    def __init__(self, x, y, board):
+        super().__init__(x, y, board)
+        self.durability = None
+        self.image = pygame.surface.Surface((self.board.cell_size, self.board.cell_size))
+        self.rect = pygame.rect.Rect(self.image.get_rect())
+        self.rect.x = x * self.board.cell_size
+        self.rect.y = y * self.board.cell_size
+        c = pygame.sprite.spritecollide(self, self.board, False)
+        if c is None:
+            return
+        for sprite in c:
+            if sprite == self:
+                continue
+            self.on_none_knock(sprite)
+
+    def update(self):
+        pass
+
+    def on_none_knock(self, sprite: Cell):
+        sprite.commands_property.insert(0, (sprite.destroid, "Out of borders"))
+
+
 class Player(Cell):
     def __init__(self, id, x, y, *groups, particle_system: None or particles.ParitcleSystem = None,
                  name="Player"):
@@ -331,7 +428,17 @@ class Player(Cell):
 
         self.particle_system = particle_system
 
+        self._items = []
+
         self.spawn_particle_anim()
+
+    @property
+    def items(self):
+        return self._items
+
+    @items.setter
+    def items(self, new_items):
+        self._items = new_items
 
     @property
     def name(self):
@@ -340,6 +447,15 @@ class Player(Cell):
     @property
     def id(self):
         return self.player_id
+
+    def can_add_item(self) -> bool:
+        return len(self.items) >= 3
+
+    def add_item(self, item) -> bool:
+        if self.can_add_item():
+            return False
+        self.items.append(item)
+        return True
 
     def spawn_particle_anim(self):
         if self.particle_system is None:
@@ -357,7 +473,7 @@ class Player(Cell):
 
     def destroid(self, reason):
         self.board.destroided_players_id.append(self.id)
-        print("player destoroided")
+        print(f"player destoroided, reason: {reason}")
         super().destroid(reason)
 
     def update(self):
@@ -397,6 +513,15 @@ class Player(Cell):
 
     def left(self):
         self.go_forward(forward.left)
+
+    def use(self):
+        self.add_command((self._use, None))
+
+    def _use(self, none: None):
+        if len(self.items) == 0:
+            return
+        self.items.pop(0).use(self)
+        self.now_command = None
 
 
 class Asteroid(Cell):
@@ -503,13 +628,78 @@ class IceCrystal(Cell):
                 Ice(x, y, self.board.ground_board, self.particle_system)
 
 
+class Bullet(Cell):
+    def __init__(self, x, y, board, status, particle_system=None):
+        super().__init__(x, y, board)
+        self.particle_system = particle_system
+        self.durability = None
+        self.item_image = pygame.image.load("BulletItem.png")
+        self.item_image = self.set_rectangule(self.item_image, 10, 10, 80, 80)
+        self.item_image = pygame.transform.scale(self.item_image, (self.board.cell_size, self.board.cell_size))
+        self.item_image.set_colorkey("#000000")
+        self.go_image = pygame.image.load("Bullet.png")
+        self.go_image = self.set_rectangule(self.go_image, 40, 30, 20, 30)
+        self.go_image = pygame.transform.scale(self.go_image, (self.board.cell_size, self.board.cell_size))
+        self.go_image.set_colorkey("#000000")
+        self.image = self.item_image
+        self.rect = pygame.Rect(self.image.get_rect())
+        self.rect.x, self.rect.y = self.board_x * self.board.cell_size, self.board_y * self.board.cell_size
+
+        self.status = status
+        self.move_speed = 30
+
+    def bullet_start_anim(self, sprite_must_forward):
+        if self.particle_system is None:
+            return
+        for _ in range(int(30 / self.fps * 30)):
+            x_y = (self.place_x + self.board.cell_size // 2, self.place_y + self.board.cell_size // 2)
+            d = random.randint(2, 6)
+            w_h = (d, d)
+            forw = forward.vector(forward.opposite(forward.form_up_degree(sprite_must_forward)))
+            forw = (forw[0] * 8 + random.randint(-10, 10) / 5, forw[1] * 8 + random.randint(-10, 10) / 5)
+            l_t = random.randint(10, 20)
+            color = "#acacac"
+            particles.Particle(self.particle_system,
+                               x_y, w_h, forw, l_t, color)
+
+    @staticmethod
+    def set_rectangule(surface, x, y, width, height):
+        surf = pygame.surface.Surface((100, 100))
+        surface = pygame.transform.scale(surface, (int(width), int(height)))
+        surf.blit(surface, (int(x), int(y)))
+        return surf
+
+    def on_none_knock(self, sprite: Cell):
+        if type(sprite) is Player:
+            if sprite.add_item(self):
+                self.destroid("Was added into Player")
+            else:
+                pass
+
+    def use(self, sprite: Player):
+        self.status = item_status.active
+        self.add(sprite.board)
+        self.x, self.y = sprite.x + forward.vector(forward.opposite(sprite.must_forward))[0],\
+                         sprite.y + forward.vector(forward.opposite(sprite.must_forward))[1]
+        self.must_forward = sprite.must_forward
+        self._move_start(sprite.must_forward)
+        self.progress_x, self.progress_y = 70, 70
+        self._move()
+        self.durability = 3
+        self.image = pygame.transform.rotate(self.go_image, sprite.must_forward)
+        self.bullet_start_anim(sprite.must_forward)
+        for i in range(10):
+            self.move(forward.opposite(sprite.must_forward))
+
+
 def random_cells(board, ground, n=10):
     for _ in range(n):
-        cell = random.choice([Asteroid, Ice, Ice, Ice, IceCrystal])
-        if cell in [Asteroid, IceCrystal]:
+        cell = random.choice([Asteroid, Ice, IceCrystal, Bullet])
+        if cell in [Asteroid, IceCrystal, Bullet]:
             board.random_cell(cell)
         else:
             ground.random_cell(cell)
+
 
 if __name__ == '__main__':
     pygame.init()
@@ -536,10 +726,11 @@ if __name__ == '__main__':
                 d = {locals.K_UP: player.down,
                      locals.K_DOWN: player.up,
                      locals.K_RIGHT: player.right,
-                     locals.K_LEFT: player.left}
+                     locals.K_LEFT: player.left,
+                     locals.K_0: player.use}
                 if d.get(event.key, None) is not None:
                     d.get(event.key)()
-        board.draw_flor(screen)
+            board.event(event)
         ground.draw_flor(screen)
         particle_system.update()
         board.update()

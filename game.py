@@ -160,6 +160,7 @@ class GameManager:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                 self.ui_group.event(event)
+                board.event(event, no_zone=now_is_lobby)
 
             # BOARDS
             boards_screen = pygame.surface.Surface((self.board_widht, self.board_height))

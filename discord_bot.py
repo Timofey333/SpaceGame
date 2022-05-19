@@ -9,6 +9,7 @@ DOWN_REACTION = "⬇"
 LEFT_REACTION = "➡"
 RIGHT_REACTION = "⬅"
 DESTROID_REACTION = "💀"
+USE_REACTION = "⏏"
 
 
 class CustomClient(discord.Client):
@@ -57,7 +58,7 @@ class CustomClient(discord.Client):
                 self.game_manager.active_board.destroided_players_id.remove(user.id)
             game_board.Player(user.id, None, None, self._game_manager.active_board,
                               particle_system=self.game_manager.active_board.particle_system,
-                              name=user.name)
+                              name=str(user.name))
             return
 
         if player is None:
@@ -67,7 +68,8 @@ class CustomClient(discord.Client):
         d = {UP_REACTION: player.down,
              DOWN_REACTION: player.up,
              RIGHT_REACTION: player.left,
-             LEFT_REACTION: player.right}
+             LEFT_REACTION: player.right,
+             USE_REACTION: player.use}
         if d.get(str(reaction), None) is not None:
             d.get(str(reaction))()
         if str(reaction) == DESTROID_REACTION:

@@ -5,6 +5,10 @@ right = "right_forward"
 
 
 def opposite(forward) -> str:
+    if type(forward) == int:
+        forward = form_up_degree(forward)
+    elif type(forward) == tuple[int, int]:
+        forward = from_vector(forward)
     if forward == up:
         return down
     if forward == down:
@@ -16,6 +20,10 @@ def opposite(forward) -> str:
 
 
 def vector(forward) -> tuple[int, int]:
+    if type(forward) == int:
+        forward = form_up_degree(forward)
+    if type(forward) == tuple[int, int]:
+        return forward
     if forward == up:
         return (0, 1)
     if forward == down:
