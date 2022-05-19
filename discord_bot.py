@@ -52,9 +52,9 @@ class CustomClient(discord.Client):
         print(str(reaction), user)
         await reaction.remove(user)
         player = self._game_manager.find_player(user.id)
-        if str(reaction) == JOIN_REACTION and player is None:
-            if user.id in self._game_manager.active_board.destroided_players_id:
-                return
+        if str(reaction) == JOIN_REACTION and player is None and self.game_manager.is_lobby:
+            if user.id in self.game_manager.active_board.destroided_players_id:
+                self.game_manager.active_board.destroided_players_id.remove(user.id)
             game_board.Player(user.id, None, None, self._game_manager.active_board,
                               particle_system=self.game_manager.active_board.particle_system)
             return

@@ -35,6 +35,15 @@ class Board(pygame.sprite.Group):
         super().__init__(*sprites)
 
     @property
+    def alive_players(self):
+        p = []
+        for sprite in self.sprites():
+            if type(sprite) is Player:
+                if sprite.id not in self.destroided_players_id:
+                    p.append(sprite)
+        return p
+
+    @property
     def destroided_players_id(self):
         return self._destroided_players_id
 
@@ -57,6 +66,10 @@ class Board(pygame.sprite.Group):
     @fps.setter
     def fps(self, n: int):
         self.game_fps = n
+
+    def spawn_players(self, players: list):
+        for p in players:
+            Player(p.id, None, None, self, particle_system=self.particle_system)
 
     def random_antnes_pos(self):
         field = [[True for _ in range(self.borders[0])] for _ in range(self.borders[1])]
@@ -133,12 +146,12 @@ class Cell(pygame.sprite.Sprite):
         self.is_icing = False
 
     def check_borders(self):
-        if self.board_x < 0 or self.board_x >= self.board.borders[0] and\
+        if self.board_x < 0 or self.board_x >= self.board.borders[0] or\
             self.board_y < 0 or self.board_y >= self.board.borders[1]:
-            if type(self) is Player:
-                self.destroid("Qut of borders")
-            else:
-                self.kill()
+            self.destroid("Qut of borders")
+
+    def destroid(self, reason: str):
+        self.kill()
 
     def update(self):
         self._check_commands()
@@ -338,7 +351,8 @@ class Player(Cell):
 
     def destroid(self, reason):
         self.board.destroided_players_id.append(self.id)
-        self.kill()
+        print("player destoroided")
+        super().destroid(reason)
 
     def update(self):
         super().update()
@@ -445,8 +459,8 @@ class Ice(Cell):
             particles.Particle(self.particle_system,
                                x_y, w_h, forw, l_t, color)
 
-    def on_none_knock(self, sprite: Cell):
-        self.cnock_particle_anim()
+    # def on_none_knock(self, sprite: Cell):
+    #     self.cnock_particle_anim()
 
 
 class IceCrystal(Cell):
