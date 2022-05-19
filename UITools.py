@@ -4,6 +4,11 @@ from pygame import locals
 import pyperclip
 
 
+if __name__ == "__main__":
+    pygame.init()
+    pygame.font.init()
+
+
 class UIGroup(pygame.sprite.Group):
     def __init__(self):
         super().__init__()
@@ -87,28 +92,6 @@ class InputField(pygame.sprite.Sprite):
         self.rect.x, self.rect.y = self.x, self.y
 
 
-if __name__ == "__main__":
-    pygame.init()
-    screen = pygame.display.set_mode((1000, 1000))
-    clock = pygame.time.Clock()
-    fps = 30
-    screen.fill("#000000")
-
-    g = pygame.sprite.Group()
-
-    field = InputField(g, 10, 10, 500, 100, ampty_text="enter bot token")
-
-    while True:
-        clock.tick(fps)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-            field.event(event)
-        g.update()
-        g.draw(screen)
-        pygame.display.flip()
-
-
 class Button(pygame.sprite.Sprite):
     def __init__(self, group: pygame.sprite.Group, x, y,
                  width, height, text, fill_color="#ffffff",
@@ -149,3 +132,65 @@ class Button(pygame.sprite.Sprite):
 
     def on_pressed(self):
         pass
+
+
+class Text(pygame.sprite.Sprite):
+    def __init__(self, group: pygame.sprite.Group, x, y,
+                 width, height, text, fill_color="#ffffff",
+                 font=pygame.font.SysFont("monospace", 15),
+                 text_color="#000000", text_x=0, text_y=0,
+                 text_step_y=15):
+        super().__init__(group)
+        self.sprite_group = group
+        self.x, self.y = x, y
+        self.width, self.height = width, height
+        self._text = text
+        self.font = font
+        self.fill_color = fill_color
+        self.text_color = text_color
+        self.text_x, self.text_y = text_x, text_y
+        self.text_step_y = text_step_y
+        self.update_image()
+
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, new_text):
+        self._text = new_text
+        self.update_image()
+
+    def update(self):
+        pass
+
+    def update_image(self):
+        y = self.text_y
+        all_text_surf = pygame.surface.Surface((int(self.width), int(self.height)))
+        for l in self.text.split("\n"):
+            text_surf = self.font.render(l, 1, self.text_color)
+            all_text_surf.blit(text_surf, (self.text_x, y))
+            y += self.text_step_y
+        self.image = all_text_surf
+        self.rect = pygame.rect.Rect(self.image.get_rect())
+        self.rect.x, self.rect.y = self.x, self.y
+
+
+if __name__ == "__main__":
+    screen = pygame.display.set_mode((1000, 1000))
+    clock = pygame.time.Clock()
+    fps = 30
+    screen.fill("#000000")
+
+    g = pygame.sprite.Group()
+
+    text = Text(g, 10, 10, 100, 100, "Hello world\nhello\nworld", text_color="#ffffff")
+
+    while True:
+        clock.tick(fps)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+        g.update()
+        g.draw(screen)
+        pygame.display.flip()

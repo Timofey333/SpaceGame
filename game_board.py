@@ -317,7 +317,8 @@ class Cell(pygame.sprite.Sprite):
 
 
 class Player(Cell):
-    def __init__(self, id, x, y, *groups, particle_system: None or particles.ParitcleSystem = None):
+    def __init__(self, id, x, y, *groups, particle_system: None or particles.ParitcleSystem = None,
+                 name="Player"):
         super().__init__(x, y, *groups)
         self.start_image = pygame.image.load("Player.png")
         self.start_image = pygame.transform.scale(self.start_image,
@@ -326,10 +327,15 @@ class Player(Cell):
         self.image.set_colorkey("#000000")
 
         self.player_id = id
+        self._name = name
 
         self.particle_system = particle_system
 
         self.spawn_particle_anim()
+
+    @property
+    def name(self):
+        return self._name
 
     @property
     def id(self):
@@ -519,7 +525,7 @@ if __name__ == '__main__':
 
     random_cells(board, ground, n=20)
 
-    player = Player(1, 1, board, particle_system=particle_system)
+    player = Player(1, 1, 1, board, particle_system=particle_system)
 
     while True:
         clock.tick(fps)
