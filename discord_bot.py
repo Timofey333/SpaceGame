@@ -58,7 +58,7 @@ class CustomClient(discord.Client):
                 self.game_manager.active_board.destroided_players_id.remove(user.id)
             game_board.Player(user.id, None, None, self._game_manager.active_board,
                               particle_system=self.game_manager.active_board.particle_system,
-                              name=str(user.name))
+                              name=str(user.name), ui_group=self.game_manager.board_ui_group)
             return
 
         if player is None:

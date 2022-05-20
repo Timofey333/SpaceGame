@@ -1,3 +1,5 @@
+import sys
+
 import game_board
 import pygame
 
@@ -8,6 +10,7 @@ import particles
 import discord_bot
 import UITools
 from threading import Thread
+from sys import exit
 
 
 class GameManager:
@@ -21,6 +24,8 @@ class GameManager:
         self.chat_id = self.get_form_file("CHAT_ID.txt")
         self._is_lobby = True
         self.is_bot_started = False
+        self.error_text = None
+        self.winner_player = None
 
         # BOARD SETTINGS
         self.board_widht, self.board_height = min((self.screen_width * 4) // 5 - 10, self.screen_height - 10), \
@@ -33,6 +38,10 @@ class GameManager:
         self.lobby()
 
     @property
+    def board_ui_group(self):
+        return self.board_ui
+
+    @property
     def is_lobby(self):
         return self._is_lobby
 
@@ -41,7 +50,12 @@ class GameManager:
         self._is_lobby = b
 
     def run_bot(self):
-        if not self.is_bot_started:
+        if not self.chat_id.isdigit():
+            self.create_error_text("The chat ID must be a number")
+            return
+        if self.is_bot_started:
+            self.create_error_text("The bot is already running")
+        else:
             self.ds_bot = discord_bot.CustomClient(self, self.chat_id)
             th = Thread(target=self._run_bot)
             th.start()
@@ -51,7 +65,7 @@ class GameManager:
             self.is_bot_started = True
             self.ds_bot.run(self.token)
         except:
-            print("None")
+            self.create_error_text("Error when starting the bot")
 
     def find_player(self, id):
         for sprite in self.active_board.sprites():
@@ -95,6 +109,7 @@ class GameManager:
             self.set_to_file("CHAT_ID.txt", str(self.chat_id))
 
     def lobby(self):
+        self.winner_player = None
         self.ui_group = UITools.UIGroup()
         bot_start_button = UITools.Button(self.ui_group, 10, 190, self.board_x // 2, 50, "<start bot>",
                                           font=pygame.font.SysFont("monospace", 25), text_y=10)
@@ -115,6 +130,16 @@ class GameManager:
                 text += "..."
                 break
         return str(text)
+
+    def create_error_text(self, text):
+        # TODO: вязать в fps
+        if self.error_text is not None:
+            self.error_text.kill()
+        font = pygame.font.SysFont("monospace", 20)
+        x = self.screen_width // 10
+        self.error_text = UITools.PopupText(self.ui_group, (x, x), (self.screen_height, self.screen_height - 50),
+                                            self.screen_width, 50, str(text), kill_timer=5,
+                                            text_color="#ebf208", font=font)
 
     def game(self):
         self.ui_group = UITools.UIGroup()
@@ -137,11 +162,12 @@ class GameManager:
                                   particle_system=particle_system)
         board = game_board.Board((self.board_widht, self.board_height), (10, 10), fps=fps,
                                  particle_system=particle_system,
-                                 floor_board=ground)
+                                 floor_board=ground, harmless_cells=self.is_lobby)
+        self.board_ui = UITools.UIGroup()
         if not self.is_lobby:
             board.spawn_players(self.active_board.alive_players)
         self._active_board = board
-        game_board.random_cells(board, ground, n=20)
+        game_board.random_cells(board, ground, n=20, harmless=self.is_lobby)
 
         if self.is_lobby:
             token_input_filed = UITools.InputField(self.ui_group, 10, 50, self.board_x - 30, 50, see_simbols=10,
@@ -150,20 +176,28 @@ class GameManager:
                                                      ampty_text="chat id",
                                                      text=self.chat_id)
         else:
-            log_text = UITools.Text(self.ui_group, 10, 50, self.board_widht // 2, self.board_height - 150, "", text_color="#ffffff",
+            log_text = UITools.Text(self.ui_group, 10, 50, self.board_widht // 2, self.board_height - 150, "",
+                                    text_color="#ffffff",
                                     text_step_y=17)
         now_is_lobby = self.is_lobby
+
+        self.create_error_text("Hello")
+
         while self.is_lobby == now_is_lobby:
             clock.tick(fps)
+            self.screen.fill("#000000")
             # EVENTS
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
+                    exit()
                 self.ui_group.event(event)
+                self.board_ui.event(event)
                 board.event(event, no_zone=now_is_lobby)
 
             # BOARDS
             boards_screen = pygame.surface.Surface((self.board_widht, self.board_height))
+            boards_screen.fill("#000000")
             ground.draw_flor(boards_screen)
             particle_system.update()
             board.update()
@@ -171,6 +205,11 @@ class GameManager:
             ground.draw(boards_screen)
             particle_system.draw(boards_screen)
             board.draw(boards_screen)
+
+            self.board_ui.update()
+            self.board_ui.draw(boards_screen)
+
+            self.screen.blit(boards_screen, (self.board_x, self.board_y))
 
             # UI
             self.ui_group.update()
@@ -182,9 +221,16 @@ class GameManager:
                 self.set_chat_id(chat_id_input_filed.input_text)
             else:
                 log_text.text = self.log_text()
+                if len(self.active_board.alive_players) == 1 and self.winner_player is None:
+                    self.winner_player = self.active_board.alive_players[0]
+                    font = pygame.font.SysFont("monospace", 30)
+                    x = self.screen_width // 10
+                    self.error_text = UITools.PopupText(self.ui_group, (x, x),
+                                                        (0, 30),
+                                                        self.screen_width, 50, str(f"{self.winner_player.name} won!"),
+                                                        text_color="#f2f82b", font=font)
 
             # END
-            self.screen.blit(boards_screen, (self.board_x, self.board_y))
             pygame.display.flip()
         if self.is_lobby:
             self.lobby()
@@ -192,6 +238,10 @@ class GameManager:
             self.game()
 
     def start_game(self):
+        # TODO: сделать 2 игрока для начала (сейчас 1)
+        if len(self.active_board.alive_players) <= 0:
+            self.create_error_text("You need at least 2 players to start.")
+            return
         print("start game")
         self.is_lobby = False
 

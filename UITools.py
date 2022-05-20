@@ -3,10 +3,8 @@ from pygame import locals
 
 import pyperclip
 
-
-if __name__ == "__main__":
-    pygame.init()
-    pygame.font.init()
+pygame.init()
+pygame.font.init()
 
 
 class UIGroup(pygame.sprite.Group):
@@ -139,7 +137,7 @@ class Text(pygame.sprite.Sprite):
                  width, height, text, fill_color="#ffffff",
                  font=pygame.font.SysFont("monospace", 15),
                  text_color="#000000", text_x=0, text_y=0,
-                 text_step_y=15):
+                 text_step_y=15, colorkey_color="#00ff00"):
         super().__init__(group)
         self.sprite_group = group
         self.x, self.y = x, y
@@ -150,6 +148,7 @@ class Text(pygame.sprite.Sprite):
         self.text_color = text_color
         self.text_x, self.text_y = text_x, text_y
         self.text_step_y = text_step_y
+        self.colorkey_color=colorkey_color
         self.update_image()
 
     @property
@@ -167,30 +166,65 @@ class Text(pygame.sprite.Sprite):
     def update_image(self):
         y = self.text_y
         all_text_surf = pygame.surface.Surface((int(self.width), int(self.height)))
+        all_text_surf.fill(self.colorkey_color)
         for l in self.text.split("\n"):
-            text_surf = self.font.render(l, 1, self.text_color)
+            text_surf = self.font.render(l, False, self.text_color)
             all_text_surf.blit(text_surf, (self.text_x, y))
             y += self.text_step_y
         self.image = all_text_surf
+        self.image.set_colorkey(self.colorkey_color)
         self.rect = pygame.rect.Rect(self.image.get_rect())
         self.rect.x, self.rect.y = self.x, self.y
+
+
+class PopupText(Text):
+    def __init__(self, group: pygame.sprite.Group, x: tuple[int, int], y: tuple[int, int],
+                 width, height, text, fill_color="#ffffff",
+                 font=pygame.font.SysFont("monospace", 15),
+                 text_color="#000000", text_x=0, text_y=0,
+                 text_step_y=15, speed=3, fps=30, colorkey_color="#00ff00",
+                 kill_timer: int or None = None):
+        super().__init__(group, x[0], y[0], width, height, text, fill_color=fill_color,
+                         font=font, text_color=text_color, text_x=text_x, text_y=text_y,
+                         text_step_y=text_step_y, colorkey_color=colorkey_color)
+        self.progress = 1
+        self.start_x, self.start_y = x[0], y[0]
+        self.stop_x, self.stop_y = x[1], y[1]
+
+        self.speed = speed
+        self.fps = fps
+        self.kill_timer = kill_timer
+        self.kill_time = 0
+
+        self.update_image()
+
+    def update(self):
+        if self.progress < 100:
+            self.progress += self.speed * 30 / self.fps
+            self.x = int(self.start_x + (self.stop_x - self.start_x) * self.progress / 100)
+            self.y = int(self.start_y + (self.stop_y - self.start_y) * self.progress / 100)
+            self.update_image()
+        elif self.kill_timer is not None:
+            self.kill_time += 1 / self.fps
+            if self.kill_time >= self.kill_timer:
+                self.kill()
 
 
 if __name__ == "__main__":
     screen = pygame.display.set_mode((1000, 1000))
     clock = pygame.time.Clock()
     fps = 30
-    screen.fill("#000000")
 
     g = pygame.sprite.Group()
 
-    text = Text(g, 10, 10, 100, 100, "Hello world\nhello\nworld", text_color="#ffffff")
+    text = PopupText(g, (-50, 50), (50, 50), 100, 100, "Hello world\nhello\nworld", text_color="#000000")
 
     while True:
         clock.tick(fps)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+        screen.fill("#ffffff")
         g.update()
         g.draw(screen)
         pygame.display.flip()
