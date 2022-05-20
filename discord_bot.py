@@ -19,7 +19,7 @@ class CustomClient(discord.Client):
         self.channel_id = channel_id
         self.reactions = [UP_REACTION, DOWN_REACTION,
                           LEFT_REACTION, RIGHT_REACTION,
-                          DESTROID_REACTION]
+                          USE_REACTION, DESTROID_REACTION]
         print("Start game")
 
     @property

@@ -124,7 +124,7 @@ class Board(pygame.sprite.Group):
 
     def spawn_players(self, players: list):
         for p in players:
-            Player(p.id, None, None, self, particle_system=self.particle_system)
+            Player(p.id, None, None, self, particle_system=self.particle_system, name=p.name)
 
     def random_antnes_pos(self):
         field = [[True for _ in range(self.borders[0])] for _ in range(self.borders[1])]
@@ -361,7 +361,6 @@ class Cell(pygame.sprite.Sprite):
                             else:
                                 collided_sprite.knock(self)
 
-
     def add_command(self, command):
         self.commands.append(command)
 
@@ -448,6 +447,18 @@ class Player(Cell):
     def id(self):
         return self.player_id
 
+    def draw_nick_name(self):
+        items_text = "".join([{Bullet: "¤"}.get(type(i), "?") for i in self.items])
+        text_surf = pygame.font.SysFont("monospace", self.board.cell_size // 5).render(self.name[:5] + items_text,
+                                                                                       False, "#ffffff")
+        with_text_image = pygame.transform.rotate(self.start_image, self.cell_forward)
+        with_text_image.blit(text_surf, (5, 5))
+        self.image = with_text_image
+
+    def _rotate(self):
+        super()._rotate()
+        self.draw_nick_name()
+
     def can_add_item(self) -> bool:
         return len(self.items) >= 3
 
@@ -519,6 +530,7 @@ class Player(Cell):
 
     def _use(self, none: None):
         if len(self.items) == 0:
+            self.now_command = None
             return
         self.items.pop(0).use(self)
         self.now_command = None
@@ -679,7 +691,7 @@ class Bullet(Cell):
     def use(self, sprite: Player):
         self.status = item_status.active
         self.add(sprite.board)
-        self.x, self.y = sprite.x + forward.vector(forward.opposite(sprite.must_forward))[0],\
+        self.x, self.y = sprite.x + forward.vector(forward.opposite(sprite.must_forward))[0], \
                          sprite.y + forward.vector(forward.opposite(sprite.must_forward))[1]
         self.must_forward = sprite.must_forward
         self._move_start(sprite.must_forward)
