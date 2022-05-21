@@ -32,13 +32,17 @@ class CustomClient(discord.Client):
 
     async def on_ready(self):
         print(f"{self.user} has connected to Ds")
-        channel = self.get_channel(int(self.channel_id))
-        print(*self.get_all_channels())
-        self.mes = await channel.send("=== Space Game ===")
-        await self.mes.clear_reactions()
-        await self.mes.add_reaction(JOIN_REACTION)
-        for i in self.reactions:
-            await self.mes.add_reaction(i)
+        try:
+            channel = self.get_channel(int(self.channel_id))
+            print(*self.get_all_channels())
+            self.mes = await channel.send("=== Space Game ===")
+            await self.mes.clear_reactions()
+            await self.mes.add_reaction(JOIN_REACTION)
+            for i in self.reactions:
+                await self.mes.add_reaction(i)
+        except:
+            self.game_manager.bot_is_not_started()
+            self.game_manager.create_error_text("Error when sending a message to the channel")
 
     def set_colot_reactions(self):
         pass

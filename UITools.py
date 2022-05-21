@@ -54,7 +54,9 @@ class InputField(pygame.sprite.Sprite):
         if event.type == pygame.KEYDOWN:
             if self.active:
                 ctrl = event.mod and pygame.KMOD_CTRL
-                if event.key == pygame.K_BACKSPACE:
+                if event.key == pygame.K_BACKSPACE and ctrl:
+                    self.text = ""
+                elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 elif event.key == pygame.K_v and ctrl:
                     self.text += pyperclip.paste()
@@ -184,6 +186,7 @@ class PopupText(Text):
                  text_color="#000000", text_x=0, text_y=0,
                  text_step_y=15, speed=3, fps=30, colorkey_color="#00ff00",
                  kill_timer: int or None = None):
+        self.is_init = True
         super().__init__(group, x[0], y[0], width, height, text, fill_color=fill_color,
                          font=font, text_color=text_color, text_x=text_x, text_y=text_y,
                          text_step_y=text_step_y, colorkey_color=colorkey_color)
@@ -197,8 +200,11 @@ class PopupText(Text):
         self.kill_time = 0
 
         self.update_image()
+        self.is_init = False
 
     def update(self):
+        if self.is_init:
+            return
         if self.progress < 100:
             self.progress += self.speed * 30 / self.fps
             self.x = int(self.start_x + (self.stop_x - self.start_x) * self.progress / 100)

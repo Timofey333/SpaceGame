@@ -26,7 +26,7 @@ class Board(pygame.sprite.Group):
     def __init__(self, width_height: tuple[int, int], borders: tuple[int, int],
                  *sprites: list[pygame.sprite.Sprite] or None, fps=30,
                  particle_system: None or particles.ParitcleSystem = None,
-                 floor_board=None, harmless_cells=False) -> None:
+                 floor_board=None, harmless_cells=False, random_cell_event_timer=(1, 5)) -> None:
         self.floor_board = floor_board
         self.width = width_height[0]
         self.height = width_height[1]
@@ -40,6 +40,7 @@ class Board(pygame.sprite.Group):
         self._destroided_players_id = []
         self.harmless_cells = harmless_cells
         self.zone_cells = []
+        self.random_cell_event_timer = random_cell_event_timer
         if self.floor_board is not None:
             self.zone_event = pygame.event.Event(0)
             self.zone_events_count = 5
@@ -99,7 +100,7 @@ class Board(pygame.sprite.Group):
         pygame.time.set_timer(self.zone_event, random.randint(40, 60) * 1000)
 
     def randomize_random_cell_event(self):
-        pygame.time.set_timer(self.random_cell_event, random.randint(1, 5) * 1000)
+        pygame.time.set_timer(self.random_cell_event, random.randint(*self.random_cell_event_timer) * 1000)
 
     def set_zone_cell(self):
         if len(self.zone_cells) != 0:
@@ -207,7 +208,7 @@ class Cell(pygame.sprite.Sprite):
         self.fps = board.fps
 
         self.cell_forward = 0
-        self.must_forward = 0
+        self._must_forward = 0
         self.place_x = x * board.cell_size
         self.place_y = y * board.cell_size
 
@@ -237,6 +238,14 @@ class Cell(pygame.sprite.Sprite):
     def commands_property(self):
         return self.commands
 
+    @property
+    def must_forward(self):
+        return self._must_forward
+
+    @must_forward.setter
+    def must_forward(self, n):
+        self._must_forward = n
+
     def check_borders(self):
         if self.board_x < 0 or self.board_x >= self.board.start_borders[0] or \
                 self.board_y < 0 or self.board_y >= self.board.start_borders[1]:
@@ -262,7 +271,7 @@ class Cell(pygame.sprite.Sprite):
         self.durability -= strong
         self.on_knock(sprite)
         if self.durability <= 0:
-            self.kill()
+            self.destroid("Knocked")
 
     def on_knock(self, sprite: pygame.sprite.Sprite):
         pass
@@ -372,17 +381,17 @@ class Cell(pygame.sprite.Sprite):
                             collided_sprite.on_none_knock(self)
                         else:
                             # ТОЛКНОВЕНИЕ
-                            if type(collided_sprite) is Player and type(self) is Player:
-                                return
                             self.progress_x, self.progress_y = 80, 80
                             i_x, i_y = self.must_x, self.must_y
                             self.must_x, self.must_y = self.start_x, self.start_y
                             self.start_x, self.start_y = i_x, i_y
                             self.board_x, self.board_y = self.last_board_x, self.last_board_y
                             self.now_command = self._move_start
+                            if type(collided_sprite) is Player and type(self) is Player:
+                                return
                             if type(self) == Bullet:
                                 collided_sprite.knock(self, strong=3)
-                                self.destroid("Was bullet")
+                                self.destroid("I am bullet")
                             else:
                                 collided_sprite.knock(self)
 
@@ -447,6 +456,8 @@ class Player(Cell):
                                                   (self.board.cell_size, self.board.cell_size))
         self.image = self.start_image
         self.image.set_colorkey("#000000")
+
+        self.durability = 1
 
         self.player_id = id
         self._name = name
@@ -520,7 +531,7 @@ class Player(Cell):
             ex, ey = self.last_board_x * self.board.cell_size + self.board.cell_size // 5, \
                      self.last_board_y * self.board.cell_size + self.board.cell_size // 5
             UITools.PopupText(self.ui_group, (sx, ex), (sy, ey), 100, 100, "Good bye", text_color="#ffffff",
-                              kill_timer=7)
+                              kill_timer=7, fps=self.board.fps)
         super().destroid(reason)
 
     def update(self):
@@ -620,7 +631,6 @@ class Asteroid(Cell):
                                x_y, w_h, forw, l_t, color)
 
     def on_knock(self, sprite: Cell):
-        # TODO: делать нормально!
         self.cnock_particle_anim(sprite.must_forward)
         self.change_image()
 
@@ -680,7 +690,6 @@ class IceCrystal(Cell):
                                x_y, w_h, forw, l_t, color)
 
     def on_knock(self, sprite: Cell):
-        # TODO: делать нормально!
         self.cnock_particle_anim(sprite.must_forward)
         if self.durability <= 0:
             for x_y in [(0, 0), (-1, 0), (1, 0), (0, 1), (0, -1)]:
@@ -779,6 +788,8 @@ if __name__ == '__main__':
     ui_group = pygame.sprite.Group()
 
     player = Player(1, 1, 1, board, particle_system=particle_system, ui_group=ui_group)
+
+    player2 = Player(2, 2, 2, board, particle_system=particle_system, ui_group=ui_group)
 
     while True:
         clock.tick(fps)

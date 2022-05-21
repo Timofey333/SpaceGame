@@ -26,6 +26,7 @@ class GameManager:
         self.is_bot_started = False
         self.error_text = None
         self.winner_player = None
+        self.fps = 30
 
         # BOARD SETTINGS
         self.board_widht, self.board_height = min((self.screen_width * 4) // 5 - 10, self.screen_height - 10), \
@@ -66,6 +67,7 @@ class GameManager:
             self.ds_bot.run(self.token)
         except:
             self.create_error_text("Error when starting the bot")
+            self.bot_is_not_started()
 
     def find_player(self, id):
         for sprite in self.active_board.sprites():
@@ -97,6 +99,10 @@ class GameManager:
     @property
     def active_board(self):
         return self._active_board
+
+    def bot_is_not_started(self):
+        self.is_bot_started = False
+        self.create_error_text("Error with starting bot")
 
     def set_token(self, token):
         if self.token != token:
@@ -132,14 +138,13 @@ class GameManager:
         return str(text)
 
     def create_error_text(self, text):
-        # TODO: вязать в fps
         if self.error_text is not None:
             self.error_text.kill()
         font = pygame.font.SysFont("monospace", 20)
         x = self.screen_width // 10
         self.error_text = UITools.PopupText(self.ui_group, (x, x), (self.screen_height, self.screen_height - 50),
                                             self.screen_width, 50, str(text), kill_timer=5,
-                                            text_color="#ebf208", font=font)
+                                            text_color="#ebf208", font=font, fps=self.fps)
 
     def game(self):
         self.ui_group = UITools.UIGroup()
@@ -150,19 +155,22 @@ class GameManager:
 
     def main_cycle(self):
         clock = pygame.time.Clock()
-        fps = 30
+        fps = self.fps
         self.screen.fill("#000000")
 
         text_surf = pygame.font.SysFont("monospace", 20).render("== Space game ==", 1, "#ffffff")
         self.screen.blit(text_surf, (10, 10))
 
         # SET BOARDS ANS PARTICLE SYSTEM
+        random_cell_event_timer = (3, 6) if self.is_lobby else (1, 5)
         particle_system = particles.ParitcleSystem(fps=fps)
         ground = game_board.Board((self.board_widht, self.board_height), (10, 10), fps=fps,
-                                  particle_system=particle_system)
+                                  particle_system=particle_system,
+                                  random_cell_event_timer=random_cell_event_timer)
         board = game_board.Board((self.board_widht, self.board_height), (10, 10), fps=fps,
                                  particle_system=particle_system,
-                                 floor_board=ground, harmless_cells=self.is_lobby)
+                                 floor_board=ground, harmless_cells=self.is_lobby,
+                                 random_cell_event_timer=random_cell_event_timer)
         self.board_ui = UITools.UIGroup()
         if not self.is_lobby:
             board.spawn_players(self.active_board.alive_players)
@@ -202,9 +210,12 @@ class GameManager:
             particle_system.update()
             board.update()
             ground.update()
-            ground.draw(boards_screen)
-            particle_system.draw(boards_screen)
-            board.draw(boards_screen)
+            try:
+                ground.draw(boards_screen)
+                particle_system.draw(boards_screen)
+                board.draw(boards_screen)
+            except:
+                pass
 
             self.board_ui.update()
             self.board_ui.draw(boards_screen)
@@ -213,7 +224,10 @@ class GameManager:
 
             # UI
             self.ui_group.update()
-            self.ui_group.draw(self.screen)
+            try:
+                self.ui_group.draw(self.screen)
+            except:
+                pass
 
             ###
             if now_is_lobby:
