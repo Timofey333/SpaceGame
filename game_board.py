@@ -519,7 +519,7 @@ class Player(Cell):
                      self.board_y * self.board.cell_size + self.board.cell_size // 5
             ex, ey = self.last_board_x * self.board.cell_size + self.board.cell_size // 5, \
                      self.last_board_y * self.board.cell_size + self.board.cell_size // 5
-            UITools.PopupText(self.ui_group, (sx, ex), (sy, ey), 100, 100, "Good Buy", text_color="#ffffff",
+            UITools.PopupText(self.ui_group, (sx, ex), (sy, ey), 100, 100, "Good bye", text_color="#ffffff",
                               kill_timer=7)
         super().destroid(reason)
 
