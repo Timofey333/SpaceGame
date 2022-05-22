@@ -27,6 +27,7 @@ class GameManager:
         self.error_text = None
         self.winner_player = None
         self.fps = 30
+        self._is_error_with_start_bot = False
 
         # BOARD SETTINGS
         self.board_widht, self.board_height = min((self.screen_width * 4) // 5 - 10, self.screen_height - 10), \
@@ -37,6 +38,14 @@ class GameManager:
         self.screen = pygame.display.set_mode((self.board_widht + self.board_x, self.board_height + self.board_y))
 
         self.lobby()
+
+    @property
+    def is_error_with_start_bot(self):
+        return self._is_error_with_start_bot
+
+    @is_error_with_start_bot.setter
+    def is_error_with_start_bot(self, b: bool):
+        self._is_error_with_start_bot = b
 
     @property
     def board_ui_group(self):
@@ -54,19 +63,24 @@ class GameManager:
         if not self.chat_id.isdigit():
             self.create_error_text("The chat ID must be a number")
             return
+        if self.is_error_with_start_bot:
+            self.create_error_text("Restarting bot")
+            self.ds_bot.set_chat_id(self.chat_id)
+            return
         if self.is_bot_started:
             self.create_error_text("The bot is already running")
         else:
+            self.create_error_text("Starting bot")
             self.ds_bot = discord_bot.CustomClient(self, self.chat_id)
-            th = Thread(target=self._run_bot)
-            th.start()
+            self.thread = Thread(target=self._run_bot)
+            self.thread.start()
 
     def _run_bot(self):
+        self.is_bot_started = True
         try:
-            self.is_bot_started = True
             self.ds_bot.run(self.token)
         except:
-            self.create_error_text("Error when starting the bot")
+            self.create_error_text("Error when starting the bot. I advise you to close and open the application.")
             self.bot_is_not_started()
 
     def find_player(self, id):
@@ -102,7 +116,6 @@ class GameManager:
 
     def bot_is_not_started(self):
         self.is_bot_started = False
-        self.create_error_text("Error with starting bot")
 
     def set_token(self, token):
         if self.token != token:
@@ -165,12 +178,11 @@ class GameManager:
         random_cell_event_timer = (3, 6) if self.is_lobby else (1, 5)
         particle_system = particles.ParitcleSystem(fps=fps)
         ground = game_board.Board((self.board_widht, self.board_height), (10, 10), fps=fps,
-                                  particle_system=particle_system,
                                   random_cell_event_timer=random_cell_event_timer)
         board = game_board.Board((self.board_widht, self.board_height), (10, 10), fps=fps,
-                                 particle_system=particle_system,
                                  floor_board=ground, harmless_cells=self.is_lobby,
                                  random_cell_event_timer=random_cell_event_timer)
+        # particle_system=particle_system,
         self.board_ui = UITools.UIGroup()
         if not self.is_lobby:
             board.spawn_players(self.active_board.alive_players)
@@ -252,8 +264,7 @@ class GameManager:
             self.game()
 
     def start_game(self):
-        # TODO: сделать 2 игрока для начала (сейчас 1)
-        if len(self.active_board.alive_players) <= 0:
+        if len(self.active_board.alive_players) <= 1:
             self.create_error_text("You need at least 2 players to start.")
             return
         print("start game")

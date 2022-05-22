@@ -1,6 +1,7 @@
 import discord
 from game import GameManager
 import game_board
+import time
 
 # REACTIONS
 JOIN_REACTION = "🎟"
@@ -30,19 +31,37 @@ class CustomClient(discord.Client):
     def game_manager(self, new_game_manager):
         self._game_manager = new_game_manager
 
+    def set_chat_id(self, id):
+        self.channel_id = id
+        print("update channel id")
+
     async def on_ready(self):
         print(f"{self.user} has connected to Ds")
-        try:
-            channel = self.get_channel(int(self.channel_id))
+        b = await self.send_first_message()
+        self.game_manager.create_error_text("Sending message")
+        while not b:
+            self.game_manager.create_error_text("Sending message")
+            b = await self.send_first_message()
+            time.sleep(5)
+
+    async def send_first_message(self):
+        channel = self.get_channel(int(self.channel_id))
+        print(self.channel_id)
+        print(channel)
+        print(type(channel))
+        if type(channel) != type(None):
             print(*self.get_all_channels())
             self.mes = await channel.send("=== Space Game ===")
             await self.mes.clear_reactions()
             await self.mes.add_reaction(JOIN_REACTION)
             for i in self.reactions:
                 await self.mes.add_reaction(i)
-        except:
-            self.game_manager.bot_is_not_started()
-            self.game_manager.create_error_text("Error when sending a message to the channel")
+            return True
+        else:
+            self.game_manager.is_error_with_start_bot = True
+            self.game_manager.create_error_text("Error with sending message")
+            return False
+
 
     def set_colot_reactions(self):
         pass
