@@ -789,8 +789,6 @@ if __name__ == '__main__':
 
     player = Player(1, 1, 1, board, particle_system=particle_system, ui_group=ui_group)
 
-    player2 = Player(2, 2, 2, board, particle_system=particle_system, ui_group=ui_group)
-
     while True:
         clock.tick(fps)
         screen.fill("#000000")
